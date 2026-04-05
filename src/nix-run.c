@@ -38,7 +38,7 @@
 
 // NOTE: Not exported by rofi, but needed to enable markup in display values
 #define MARKUP 8
-#define NIX_RUN_BINARY "nix"
+#define NIX_BINARY "nix"
 #define ZENITY_BINARY "zenity"
 
 G_MODULE_EXPORT Mode mode;
@@ -124,7 +124,7 @@ static void index_packages(Mode* mode) {
         GError* error = NULL;
         int nix_search_stdout_fd;
         g_spawn_async_with_pipes(
-            NULL, (char*[]) { "nix", "search", "nixpkgs", "^", "--json", "--no-pretty", NULL }, NULL,
+            NULL, (char*[]) { NIX_BINARY, "search", "nixpkgs", "^", "--json", "--no-pretty", NULL }, NULL,
             G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_SEARCH_PATH,
             NULL,
             NULL,
@@ -204,7 +204,7 @@ static void build_and_run_package(char const* package_name) {
     {
         GError* error = NULL;
         int nix_build_stdout_fd;
-        char* tmp = g_strdup_printf("nix build --no-link nixpkgs#%s", package_name);
+        char* tmp = g_strdup_printf(NIX_BINARY " build --no-link nixpkgs#%s", package_name);
         g_spawn_async_with_pipes(
             NULL, (char*[]) { "script", "-qec", tmp, "/dev/null", NULL }, NULL,
             G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_SEARCH_PATH,
@@ -233,7 +233,7 @@ static void build_and_run_package(char const* package_name) {
         GError* error = NULL;
         int zenity_stdin_fd;
         g_spawn_async_with_pipes(
-            NULL, (char*[]) { "zenity", "--progress", "--percentage=0", "--title=nix-run", "--text=Building package...", "--auto-close", NULL }, NULL,
+            NULL, (char*[]) { ZENITY_BINARY, "--progress", "--percentage=0", "--title=nix-run", "--text=Building package...", "--auto-close", NULL }, NULL,
             G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_SEARCH_PATH,
             NULL,
             NULL,
@@ -300,7 +300,7 @@ static void build_and_run_package(char const* package_name) {
         GError* error = NULL;
         char* tmp = g_strdup_printf("nixpkgs#%s", package_name);
         g_spawn_async(
-            NULL, (char*[]) { "nix", "run", tmp, NULL }, NULL,
+            NULL, (char*[]) { NIX_BINARY, "run", tmp, NULL }, NULL,
             G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
             NULL,
             NULL,
