@@ -37,7 +37,7 @@
         packages.default = pkgs.stdenv.mkDerivation {
             inherit pname version src buildInputs nativeBuildInputs;
             meta = {
-                description = "A rofi plugin to run nix packages.";
+                description = "Simple Rofi plugin to launch Nix packages (especially GUI programs).";
                 homepage = "https://github.com/ITHackerstein/rofi-nix-run";
                 license = pkgs.lib.licenses.mit;
                 platforms = pkgs.lib.platforms.linux;
