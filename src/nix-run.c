@@ -38,6 +38,8 @@
 
 // NOTE: Not exported by rofi, but needed to enable markup in display values
 #define MARKUP 8
+#define NIX_RUN_BINARY "nix"
+#define ZENITY_BINARY "zenity"
 
 G_MODULE_EXPORT Mode mode;
 

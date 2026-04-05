@@ -35,6 +35,13 @@
 
         packages.default = pkgs.stdenv.mkDerivation {
             inherit pname version src buildInputs nativeBuildInputs;
+
+            postPatch = ''
+                substituteInPlace src/nix-run.c \
+                    --replace-warn '#define NIX_RUN_BINARY "nix"' '"${pkgs.lib.getExe pkgs.nix}"' \
+                    --replace-warn '#define ZENITY_BINARY "zenity"' '"${pkgs.lib.getExe pkgs.zenity}"'
+            '';
+
             meta = {
                 description = "Simple Rofi plugin to launch Nix packages (especially GUI programs).";
                 homepage = "https://github.com/ITHackerstein/rofi-nix-run";
