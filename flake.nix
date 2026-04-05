@@ -40,7 +40,7 @@
             postPatch = ''
                 substituteInPlace src/nix-run.c \
                     --replace-warn '#define NIX_BINARY "nix"' '#define NIX_BINARY "${pkgs.lib.getExe pkgs.nix}"' \
-                    --replace-warn '#define ZENITY_BINARY "zenity"' '"#define ZENITY_BINARY ${pkgs.lib.getExe pkgs.zenity}"'
+                    --replace-warn '#define ZENITY_BINARY "zenity"' '#define ZENITY_BINARY "${pkgs.lib.getExe pkgs.zenity}"'
             '';
 
             meta = {
