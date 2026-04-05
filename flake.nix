@@ -1,11 +1,12 @@
 {
     description = "rofi-nix-run";
     inputs = {
-        nixpkgs.url = "nixpkgs";
+        nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
         systems.url = "github:nix-systems/x86_64-linux";
         flake-utils = {
             url = "github:numtide/flake-utils";
             inputs.systems.follows = "systems";
+            inputs.nixpkgs.follows = "nixpkgs";
         };
     };
     outputs = { self, nixpkgs, flake-utils, ... }: flake-utils.lib.eachDefaultSystem (system:
