@@ -37,7 +37,7 @@
             inherit pname version src buildInputs nativeBuildInputs;
 
             postPatch = ''
-                substituteInPlace src/nix-run.c \
+                substituteInPlace src/constants.h \
                     --replace-warn '#define NIX_BINARY "nix"' '#define NIX_BINARY "${pkgs.lib.getExe pkgs.nix}"' \
                     --replace-warn '#define ZENITY_BINARY "zenity"' '#define ZENITY_BINARY "${pkgs.lib.getExe pkgs.zenity}"'
             '';
