@@ -24,179 +24,39 @@
  * SOFTWARE.
  */
 
+#include "constants.h"
+#include "indexer.h"
+
 #include <assert.h>
 #include <glib.h>
 #include <rofi/helper.h>
 #include <rofi/mode-private.h>
 #include <rofi/mode.h>
 #include <stdio.h>
-#include <string.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <yyjson.h>
-
-// NOTE: Not exported by rofi, but needed to enable markup in display values
-#define MARKUP 8
-#define NIX_BINARY "nix"
-#define ZENITY_BINARY "zenity"
 
 G_MODULE_EXPORT Mode mode;
 
 typedef struct {
-    char* name;
-    char* description;
-} NRPackage;
-
-typedef struct {
-    NRPackage* packages;
-    size_t size;
-    size_t capacity;
-} NRPackages;
-
-#define NPS_INITIAL_CAPACITY 16
-
-static void nrpackages_free(NRPackages* pkgs) {
-    assert(pkgs != NULL);
-    for (size_t i = 0; i < pkgs->size; ++i) {
-        g_free(pkgs->packages[i].name);
-        g_free(pkgs->packages[i].description);
-    }
-    pkgs->packages = NULL;
-    pkgs->size = 0;
-    pkgs->capacity = 0;
-}
-
-static NRPackage* nrpackages_at(NRPackages const* pkgs, size_t index) {
-    assert(index < pkgs.size);
-    return &pkgs->packages[index];
-}
-
-static void nrpackages_add(NRPackages* pkgs, NRPackage const* pkg) {
-    if (pkgs->size >= pkgs->capacity) {
-        pkgs->capacity = pkgs->capacity == 0 ? NPS_INITIAL_CAPACITY : pkgs->capacity + (pkgs->capacity >> 1);
-        pkgs->packages = g_realloc(pkgs->packages, pkgs->capacity * sizeof(NRPackage));
-    }
-    pkgs->packages[pkgs->size++] = *pkg;
-}
-
-typedef struct {
-    NRPackages packages;
+    Index index;
     char* display_format;
     char* message;
 } NixRunPrivateData;
 
-static void remove_message(NixRunPrivateData* data) {
-    g_free(data->message);
-    data->message = NULL;
-}
-
-static void set_message(NixRunPrivateData* data, char const* format, ...) __attribute__((__format__(printf, 2, 3)));
-static void set_message(NixRunPrivateData* data, char const* format, ...) {
-    va_list args;
-    va_start(args, format);
-    g_free(data->message);
-    data->message = g_strdup_vprintf(format, args);
-    va_end(args);
-}
-
-static void nix_search_finished(GPid pid, int status, gpointer user_data) {
-    NixRunPrivateData* data = user_data;
-    if (g_spawn_check_wait_status(status, NULL)) {
-        remove_message(data);
-    } else {
-        set_message(data, "Failed to run nix search command: Process exited with status %d", WEXITSTATUS(status));
-    }
-    g_spawn_close_pid(pid);
-}
-
-static void index_packages(Mode* mode) {
-    NixRunPrivateData* data = mode_get_private_data(mode);
-    assert(data != NULL);
-
-    GPid nix_search_pid;
-    FILE* nix_search_stdout = NULL;
-    yyjson_read_err json_error;
-    yyjson_doc* packages_json = NULL;
-    NRPackages packages = { 0 };
-
-    {
-        GError* error = NULL;
-        int nix_search_stdout_fd;
-        g_spawn_async_with_pipes(
-            NULL, (char*[]) { NIX_BINARY, "search", "nixpkgs", "^", "--json", "--no-pretty", NULL }, NULL,
-            G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_SEARCH_PATH,
-            NULL,
-            NULL,
-            &nix_search_pid,
-            NULL,
-            &nix_search_stdout_fd,
-            NULL,
-            &error
-        );
-
-        if (error != NULL) {
-            set_message(data, "Failed to run nix search command: %s", error->message);
-            g_error_free(error);
-            goto cleanup;
-        }
-
-        nix_search_stdout = fdopen(nix_search_stdout_fd, "r");
-        g_child_watch_add(nix_search_pid, nix_search_finished, data);
-    }
-
-    packages_json = yyjson_read_fp(nix_search_stdout, YYJSON_READ_ALLOW_TRAILING_COMMAS, NULL, &json_error);
-    if (packages_json == NULL) {
-        set_message(data, "Failed to parse nix search output: %s", json_error.msg);
-        goto cleanup;
-    }
-
-    yyjson_val* root = yyjson_doc_get_root(packages_json);
-    if (!yyjson_is_obj(root)) {
-        set_message(data, "Unexpected format of nix search output!");
-        goto cleanup;
-    }
-
-    yyjson_obj_iter iterator = yyjson_obj_iter_with(root);
-    yyjson_val* name;
-    yyjson_val* value;
-    while ((name = yyjson_obj_iter_next(&iterator))) {
-        value = yyjson_obj_iter_get_val(name);
-        if (!yyjson_is_obj(value)) {
-            set_message(data, "Unexpected format of nix search output!");
-            goto cleanup;
-        }
-
-        yyjson_val* description = yyjson_obj_get(value, "description");
-        if (!yyjson_is_str(description)) {
-            set_message(data, "Unexpected format of nix search output!");
-            goto cleanup;
-        }
-
-        // NOTE: Strips 'legacyPackages.{platform}.' from name
-        NRPackage package;
-        char const* package_name = strstr(strstr(yyjson_get_str(name), ".") + 1, ".") + 1;
-        package.name = g_strdup(package_name);
-        package.description = g_strdup(yyjson_get_str(description));
-        nrpackages_add(&packages, &package);
-    }
-
-    data->packages = packages;
-cleanup:
-    if (data->message == NULL) {
-        data->packages = packages;
-    } else {
-        nrpackages_free(&packages);
-    }
-
-    if (packages_json != NULL) {
-        yyjson_doc_free(packages_json);
-    }
-
-    if (nix_search_stdout != NULL) {
-        fclose(nix_search_stdout);
-    }
-}
+// static void remove_message(NixRunPrivateData* data) {
+//     g_free(data->message);
+//     data->message = NULL;
+// }
+//
+// static void set_message(NixRunPrivateData* data, char const* format, ...) __attribute__((__format__(printf, 2, 3)));
+// static void set_message(NixRunPrivateData* data, char const* format, ...) {
+//     va_list args;
+//     va_start(args, format);
+//     g_free(data->message);
+//     data->message = g_strdup_vprintf(format, args);
+//     va_end(args);
+// }
 
 static void build_and_run_package(char const* package_name) {
     GPid nix_build_pid;
@@ -324,7 +184,7 @@ static int nix_run_init(Mode* mode) {
     NixRunPrivateData* data = g_malloc0(sizeof(NixRunPrivateData));
     mode_set_private_data(mode, data);
     data->display_format = "{name} <span size='small'><i>({description})</i></span>";
-    index_packages(mode);
+    data->index = Index_load();
     return TRUE;
 }
 
@@ -334,7 +194,7 @@ static void nix_run_destroy(Mode* mode) {
         return;
     }
 
-    nrpackages_free(&data->packages);
+    Index_free(&data->index);
     g_free(data);
     mode_set_private_data(mode, NULL);
 }
@@ -342,13 +202,13 @@ static void nix_run_destroy(Mode* mode) {
 static unsigned int nix_run_get_num_entries(Mode const* mode) {
     NixRunPrivateData* data = mode_get_private_data(mode);
     assert(data != NULL);
-    return (unsigned int) data->packages.size;
+    return (unsigned int) data->index.packages.size;
 }
 
 static int nix_run_token_match(Mode const* mode, rofi_int_matcher** tokens, unsigned int index) {
     NixRunPrivateData* data = mode_get_private_data(mode);
     assert(data != NULL);
-    return index < data->packages.size && helper_token_match(tokens, nrpackages_at(&data->packages, index)->name);
+    return index < data->index.packages.size && helper_token_match(tokens, NixPackages_at(&data->index.packages, index)->name);
 }
 
 static char* nix_run_get_display_value(Mode const* mode, unsigned int selected_line, G_GNUC_UNUSED int *state, G_GNUC_UNUSED GList **attr_list, int get_entry) {
@@ -358,13 +218,13 @@ static char* nix_run_get_display_value(Mode const* mode, unsigned int selected_l
         return NULL;
     }
 
-    if (selected_line >= data->packages.size) {
+    if (selected_line >= data->index.packages.size) {
         return g_strdup("");
     }
 
     *state |= MARKUP;
 
-    NRPackage* pkg = nrpackages_at(&data->packages, selected_line);
+    NixPackage* pkg = NixPackages_at(&data->index.packages, selected_line);
     char* name = g_markup_escape_text(pkg->name, -1);
     char* description = g_markup_escape_text(pkg->description, -1);
     char* formatted = helper_string_replace_if_exists(
@@ -384,14 +244,14 @@ static ModeMode nix_run_result(Mode* mode, int mretv, G_GNUC_UNUSED char** input
     }
 
     NixRunPrivateData* data = mode_get_private_data(mode);
-    if (data == NULL || selected_line >= data->packages.size) {
+    if (data == NULL || selected_line >= data->index.packages.size) {
         return MODE_EXIT;
     }
 
     pid_t pid = fork();
     if (pid == 0) {
         setsid();
-        build_and_run_package(nrpackages_at(&data->packages, selected_line)->name);
+        build_and_run_package(NixPackages_at(&data->index.packages, selected_line)->name);
         exit(0);
     } else if (pid < 0) {
         g_error("Failed to fork background process.");

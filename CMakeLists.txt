@@ -12,6 +12,7 @@ pkg_search_module(YYJSON REQUIRED yyjson)
 
 add_library(nix-run SHARED
     src/nix-run.c
+    src/indexer.c
 )
 
 target_include_directories(nix-run PRIVATE
