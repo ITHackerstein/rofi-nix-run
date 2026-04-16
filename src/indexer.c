@@ -86,8 +86,19 @@ static NixPackages fetch_packages() {
         g_assert(yyjson_is_obj(value));
         yyjson_val* description = yyjson_obj_get(value, "description");
         g_assert(yyjson_is_str(description));
+
+        char const* raw_name = yyjson_get_str(name);
+        char const* final_name = raw_name;
+        char const* first_dot = strchr(raw_name, '.');
+        if (first_dot != NULL) {
+            char const* second_dot = strchr(first_dot + 1, '.');
+            if (second_dot != NULL) {
+                final_name = second_dot + 1;
+            }
+        }
+
         NixPackage package = {
-            .name = g_strdup(yyjson_get_str(name)),
+            .name = g_strdup(final_name),
             .description = g_strdup(yyjson_get_str(description))
         };
         NixPackages_add(&packages, &package);
